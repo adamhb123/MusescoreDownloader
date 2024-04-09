@@ -1,0 +1,20 @@
+{
+    "manifest_version": 3,
+    "name": "Musescore Downloader",
+    "version": "1.0",
+    "description": "Download any Musescore score",
+      "action": {
+        "default_icon": {             
+          "32": "images/icon32.png"
+        },
+        "default_title": "Download Score"
+    },
+    "permissions": ["activeTab", "scripting"],
+    "background": {
+        "service_worker": "scripts/background.js"
+    },
+    "web_accessible_resources": [{
+        "matches": ["<all_urls>"],
+        "resources": ["scripts/print.min.js"]
+      }]
+}
