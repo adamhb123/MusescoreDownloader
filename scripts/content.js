@@ -1,71 +1,68 @@
-const timeout = (ms) => new Promise(res => setTimeout(res, ms));
+function timeout(ms) { return new Promise(res => setTimeout(res, ms)) };
 const wait_for_img = (page) => new Promise(async res => {
     while (true) {
         try {
+            console.log("Searching for image...");
             let src = page.getElementsByTagName("img")[0].getAttribute("src");
             if (src) {
+                console.log("Found image src!");
                 return res(src);
+            } else {
+                console.log("Unable to find image src...retrying")
+                await timeout(1000);
             }
         } catch {
-            console.debug("Unable to find img src...")
+            console.log("Unable to find img...retrying")
             await timeout(1000);
         }
+        await timeout(500);
     }
 });
-const downloadURI = async (uri, name) => new Promise(res => {
-    var link = document.createElement("a");
-    link.download = name;
-    link.href = uri;
-    console.log(`HREF: ${uri}`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    delete link;
-    res();
-});
-const get_page_imgs = async () => {
+async function downloadURI(uri, name) {
+    return new Promise(res => {
+        var link = document.createElement("a");
+        link.download = name;
+        link.href = uri;
+        console.log(`HREF: ${uri}`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        delete link;
+        res();
+    });
+}
+async function download_page_imgs() {
     const cname = document.getElementById("jmuse-scroller-component").children[0].getAttribute("class");
     const pages = document.getElementsByClassName(cname);
-    const dataURLs = [];
     console.log(pages);
-    for (let i in pages) {
+    for (let i = 0; i < pages.length; i++) {
+        console.log(`Downloading page ${i+1}/${pages.length}`);
         let page = pages[i]
         page.scrollIntoView();
         await wait_for_img(page);
-        // let uri = page.getElementsByTagName("img")[0].getAttribute("src");
-        dataURLs.push(toDataURL(page.getElementsByTagName("img")[0]['dataURL']));
-        //await downloadURI(uri, `score_${i}.png`);
+        let uri = page.getElementsByTagName("img")[0].getAttribute("src");
+        await downloadURI(uri, `score_${i}.png`);
         console.log(page);
+        console.log(`Finished downloading page ${i+1}/${pages.length}`);
     }
-    return dataURLs;
 }
 
-const getBase64StringFromDataURL = (dataURL) => dataURL.replace('data:', '').replace(/^.+,/, '');
-
-const toDataURL = (image) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    canvas.getContext('2d').drawImage(image, 0, 0);
-    const dataURL = canvas.toDataURL();
-    const base64 = getBase64StringFromDataURL(dataURL);
-    return {dataURL, base64};
-};
-
-(async () => { // import print.js
+/*(async () => { // import print.js
     const src = chrome.runtime.getURL("scripts/print.min.js");
     console.log("SRC: " + src);
     await import(src);
-})().then(async () => {
+})()*/
+
+(async () => {
     console.log("Hello from Musescore Downloader!");
-    console.log("GETTING");
-    let img_dataurls = await get_page_imgs();
-    console.log("GOT");
-    console.debug(img_dataurls);
+    const title = document.getElementById("aside-container-unique").getElementsByTagName("h1")[0].innerText;
+    console.log(`Downloading score: "${title}"`);
+    await download_page_imgs();
+    console.log(`Finished downloading score: "${title}"`);
     // await printJS({
     //     printable: img_dataurls,
     //     type: 'pdf'
     // });
-});
+})();
 
 

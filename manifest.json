@@ -2,19 +2,17 @@
     "manifest_version": 3,
     "name": "Musescore Downloader",
     "version": "1.0",
-    "description": "Download any Musescore score",
+    "description": "Download sheet music from Musescore with a click of a button!",
       "action": {
         "default_icon": {             
+          "16": "images/icon16.png",
           "32": "images/icon32.png"
         },
         "default_title": "Download Score"
     },
-    "permissions": ["activeTab", "scripting"],
+    "permissions": ["activeTab", "scripting", "declarativeContent"],
+    "host_permissions": ["https://musescore.com/*/scores/*"],
     "background": {
         "service_worker": "scripts/background.js"
-    },
-    "web_accessible_resources": [{
-        "matches": ["<all_urls>"],
-        "resources": ["scripts/print.min.js"]
-      }]
+    }
 }
