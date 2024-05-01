@@ -2,10 +2,14 @@
 name = "msd-companion"
 version = "0.1.0"
 edition = "2021"
-
+include = ["shawl.exe"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 actix-web = "4.5.1"
-printpdf = "0.7.0"
+printpdf = {version="0.7.0", features = ["embedded_images"]}
 serde = {version = "1.0.198", features=["derive"]}
+
+[build-dependencies]
+copy_to_output = "2.2.0"
+glob = "0.3"
