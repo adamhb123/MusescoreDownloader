@@ -23,7 +23,7 @@ fn add_image_page(doc: &PdfDocumentReference, idx: usize, path: &Path) {
     img.add_to_layer(cur_layer.clone(), ImageTransform::default());
 }
 
-fn get_pdf(fname: &String, paths: Vec<&Path>) -> Result<(), String> {
+fn get_pdf(fname: &String, paths: Vec<&Path>) -> Result<String, String> {
     // Verify all files exist
     if !paths.iter().all(|e| e.exists()) {
         return Err("Could not verify all files downloaded!".to_owned());
@@ -32,11 +32,11 @@ fn get_pdf(fname: &String, paths: Vec<&Path>) -> Result<(), String> {
     for (idx, path) in paths.iter().enumerate() {
         add_image_page(&doc, idx, path);
     }
+    let file_path = format!("{}.pdf", fname);
     doc.save(&mut BufWriter::new(
-        File::create(format!("{}.pdf", fname)).unwrap(),
-    ))
-    .unwrap();
-    Ok(())
+        File::create(file_path.to_owned()).unwrap(),
+    )).unwrap();
+    Ok(file_path)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -44,6 +44,7 @@ struct MSDQParams {
     paths: String,
     fname: String,
 }
+
 
 #[get("/msd")]
 async fn merge_files(req: HttpRequest) -> HttpResponse {
@@ -56,8 +57,9 @@ async fn merge_files(req: HttpRequest) -> HttpResponse {
         .split(",")
         .map(|pstr| Path::new(pstr))
         .collect();
-    get_pdf(fname, paths).unwrap();
-    HttpResponse::Ok().body("PDF file successfully generated!")
+    let file_path = get_pdf(fname, paths).unwrap();
+    let file = actix_files::NamedFile::open_async(file_path).await.unwrap();
+    file.into_response(&req)
 }
 
 #[actix_web::main]
@@ -82,11 +84,18 @@ fn main() {
         println!("{}", shawl_add_cmd);
         let errs: Vec<String> = [
             Command::new(shawl_add_cmd).output(),
-            Command::new("sc config msd-companion start=auto && sc start msd-companion").output()
-        ].iter().filter(|e| e.is_err()).map(|e| e.as_ref().unwrap_err().to_string()).collect();
+            Command::new("sc config msd-companion start=auto && sc start msd-companion").output(),
+        ]
+        .iter()
+        .filter(|e| e.is_err())
+        .map(|e| e.as_ref().unwrap_err().to_string())
+        .collect();
         if errs.len() > 0 {
-                println!("Failed to add and run msd-companion service:\n{}\n\nBooting server directly...", {errs.join("\n")});
-                start_server().unwrap();
+            println!(
+                "Failed to add and run msd-companion service:\n{}\n\nBooting server directly...",
+                { errs.join("\n") }
+            );
+            start_server().unwrap();
         }
     }
 }
