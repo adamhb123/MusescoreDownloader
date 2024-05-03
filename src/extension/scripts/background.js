@@ -45,11 +45,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 chrome.action.onClicked.addListener((tab) => {
   chrome.contentSettings.automaticDownloads.set({
-    primaryPattern: "https://musescore.com/*/scores/*",
+    primaryPattern: "https://musescore.com/*",
     setting: "allow"
   })
   chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['content.js']
+    files: ['scripts/content.js']
   });
 });

@@ -867,6 +867,7 @@ dependencies = [
  "copy_to_output",
  "glob",
  "printpdf",
+ "regex",
  "serde",
 ]
 
