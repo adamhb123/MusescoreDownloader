@@ -22,32 +22,48 @@
 //     chrome.declarativeContent.onPageChanged.addRules([rule]);
 //   });
 // });
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  console.log(changeInfo);
-  if ("url" in changeInfo && typeof (changeInfo["url"]) == "string") {
-    if (changeInfo['url'].includes("https://musescore")) {
-      chrome.action.setIcon({
-        path: {
-          "16": "../images/icon16.png",
-          "32": "../images/icon32.png"
-        }
-      });
-    }
-    else {
-      chrome.action.setIcon({
-        path: {
-          "16": "../images/icon16_disabled.png",
-          "32": "../images/icon32_disabled.png"
-        }
-      });
-    }
+
+const _activateIcon = () => chrome.action.setIcon({
+  path: {
+    "16": "../images/icon16.png",
+    "32": "../images/icon32.png"
   }
 });
+const _deactivateIcon = () => chrome.action.setIcon({
+  path: {
+    "16": "../images/icon16_disabled.png",
+    "32": "../images/icon32_disabled.png"
+  }
+});
+
+const updateIcon = (url) =>  (typeof (url) == "string" && url.match(/https:\/\/musescore.com\/.*\/scores\/.*/g)) ? _activateIcon() : _deactivateIcon();
+  
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  let [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (!tab) return;
+  let url = tab.url ?? tab.pending;
+  updateIcon(url);
+});
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url) updateIcon(changeInfo['url']);
+});
+
+
+chrome.downloads.onChanged.addListener((downloadDelta) => {
+  console.log(downloadDelta);
+  if (downloadDelta.filename) {
+    let match = downloadDelta.filename.current.match(/.*score_([0-9]*).*.png/);
+    console.log(match);
+    console.log(`Downloading file #${match[1]}`);
+  }
+});
+
+chrome.contentSettings.automaticDownloads.set({
+  primaryPattern: "https://musescore.com/*",
+  setting: "allow"
+});
+
 chrome.action.onClicked.addListener((tab) => {
-  chrome.contentSettings.automaticDownloads.set({
-    primaryPattern: "https://musescore.com/*",
-    setting: "allow"
-  })
   chrome.scripting.executeScript({
     target: { tabId: tab.id },
     files: ['scripts/content.js']

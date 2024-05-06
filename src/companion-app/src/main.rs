@@ -1,17 +1,46 @@
 use std::fs;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
-use std::process::Output;
 use std::{fs::File, process::Command};
 
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer};
 use printpdf::{image_crate::ImageDecoder, *};
 use regex::Regex;
+use resvg::{self, tiny_skia, usvg};
+use resvg::usvg::fontdb;
 
-const PDF_A4: (f32, f32) = (210.0, 297.0);
-const SCORE_IMAGE_REGEX: &str = r"/score_\d*.png/";
+// const PDF_A4: (f32, f32) = (210.0, 297.0);
+const SCORE_IMAGE_REGEX: &str = r".*(score_\d*)(.*)(\.png|\.svg)";
 
-fn add_image_page(doc: &PdfDocumentReference, idx: usize, path: &Path) {
+
+fn svg_to_png(path: &Path) -> PathBuf {
+    let tree = {
+        let mut opt = usvg::Options::default();
+        // Get file's absolute directory.
+        opt.resources_dir = std::fs::canonicalize(path)
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+
+        let mut fontdb = fontdb::Database::new();
+        fontdb.load_system_fonts();
+
+        let svg_data = std::fs::read(path).unwrap();
+        usvg::Tree::from_data(&svg_data, &opt, &fontdb).unwrap()
+    };
+
+    let pixmap_size = tree.size().to_int_size();
+    let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height()).unwrap();
+    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+    let output_path = path.with_extension("png");
+    pixmap.save_png(&output_path).unwrap();
+    output_path
+}
+
+fn add_image_page(doc: &PdfDocumentReference, idx: usize, mut path: PathBuf) {
+    if path.extension().unwrap().to_str().unwrap().to_lowercase() == "svg" {
+        println!("CONVERTING SVG TO PNG: {:?}", path);
+        path = svg_to_png(&path);
+    }
     let decoded_img = image_crate::codecs::png::PngDecoder::new(File::open(path).unwrap()).unwrap();
     let (img_w, img_h) = decoded_img.dimensions();
 
@@ -26,57 +55,18 @@ fn add_image_page(doc: &PdfDocumentReference, idx: usize, path: &Path) {
     img.add_to_layer(cur_layer.clone(), ImageTransform::default());
 }
 
-fn pdf_from_images(output_path: &PathBuf, paths: &Vec<PathBuf>) -> Result<(), String> {
+fn pdf_from_images(output_path: &PathBuf, paths: &[PathBuf]) -> Result<(), String> {
     // Verify all files exist
     if !paths.iter().all(|e| e.exists()) {
         return Err("Could not verify all files downloaded!".to_owned());
     }
     let doc = PdfDocument::empty(output_path.file_stem().unwrap().to_str().unwrap());
     for (idx, path) in paths.iter().enumerate() {
-        add_image_page(&doc, idx, path);
+        add_image_page(&doc, idx, path.to_owned());
     }
-    doc.save(&mut BufWriter::new(
-        File::create(output_path.to_owned()).unwrap(),
-    ))
-    .unwrap();
+    doc.save(&mut BufWriter::new(File::create(output_path).unwrap()))
+        .unwrap();
     Ok(())
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct MSDQParams {
-    paths: String,
-    fname: String,
-    output_dir: String,
-}
-
-#[get("/msd")]
-async fn merge_files(req: HttpRequest) -> HttpResponse {
-    let qstr = req.query_string();
-    let params = web::Query::<MSDQParams>::from_query(qstr).unwrap();
-    println!("params: {:#?}", params);
-    let output_dir = &params.output_dir;
-    let fname = &params.fname;
-    let paths: Vec<PathBuf> = params
-        .paths
-        .split(",")
-        .map(|pstr| PathBuf::from(pstr))
-        .collect();
-    let download_dir = paths.get(0).unwrap().parent().unwrap();
-
-    let pdf_path = PathBuf::from(format!("{output_dir}/{fname}.pdf"));
-    pdf_from_images(&pdf_path, &paths).unwrap();
-    delete_all_score_image_downloads(download_dir).unwrap();
-    let file = actix_files::NamedFile::open_async(pdf_path).await.unwrap();
-    file.into_response(&req)
-}
-
-#[actix_web::main]
-async fn start_server() -> std::io::Result<()> {
-    println!("Server starting...");
-    HttpServer::new(|| App::new().service(merge_files))
-        .bind(("127.0.0.1", 45542))?
-        .run()
-        .await
 }
 
 fn get_score_image_paths(
@@ -87,7 +77,12 @@ fn get_score_image_paths(
         // Filter out all those directory entries which couldn't be read OR that do not match the score image regex
         .filter_map(|res| {
             let res = res.ok().unwrap();
-            if score_image_regex.is_match(res.file_name().to_str().unwrap()) {
+            println!(
+                "PATH: {} IS MATCH: {}",
+                res.path().to_str().unwrap(),
+                score_image_regex.is_match(res.path().to_str().unwrap())
+            );
+            if score_image_regex.is_match(res.path().to_str().unwrap()) {
                 Some(res)
             } else {
                 None
@@ -103,6 +98,38 @@ fn delete_all_score_image_downloads(download_directory: &Path) -> Result<(), ()>
     let paths = get_score_image_paths(download_directory).unwrap();
     paths.iter().for_each(|path| fs::remove_file(path).unwrap());
     Ok(())
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MSDQParams {
+    paths: String,
+    fname: String,
+    output_dir: String,
+}
+
+#[get("/msd")]
+async fn merge_files(req: HttpRequest) -> HttpResponse {
+    let qstr = req.query_string();
+    println!("qstr: {}", qstr);
+    let params = web::Query::<MSDQParams>::from_query(qstr).unwrap();
+    println!("params: {:#?}", params);
+    let (output_dir, fname) = (&params.output_dir, &params.fname);
+    let paths: Vec<PathBuf> = params.paths.split(',').map(PathBuf::from).collect();
+    let download_dir = paths.first().unwrap().parent().unwrap();
+    let pdf_path = PathBuf::from(format!("{output_dir}/{fname}.pdf"));
+    pdf_from_images(&pdf_path, &paths).unwrap();
+    delete_all_score_image_downloads(download_dir).unwrap();
+    let file = actix_files::NamedFile::open_async(pdf_path).await.unwrap();
+    file.into_response(&req)
+}
+
+#[actix_web::main]
+async fn start_server() -> std::io::Result<()> {
+    println!("Server starting...");
+    HttpServer::new(|| App::new().service(merge_files))
+        .bind(("127.0.0.1", 45542))?
+        .run()
+        .await
 }
 
 fn main() {
@@ -123,12 +150,19 @@ fn main() {
             Command::new("sc config msd-companion start=auto && sc start msd-companion").output(),
         ]
         .iter()
-        .filter(|e| e.is_err())
-        .map(|e| e.as_ref().unwrap_err().to_string())
+        .filter_map(|e| {
+            if e.is_err() {
+                Some(e.as_ref().unwrap_err().to_string())
+            } else {
+                None
+            }
+        })
         .collect();
     }
-    if setup_errs.len() > 0 {
+    if !setup_errs.is_empty() {
         println!("Failed to add and run msd-companion service:\n{setup_errs:?}\n\nBooting server directly...");
-        start_server().unwrap();
+        start_server().expect("Failed to start MSD Companion");
+    } else {
+        println!("Successfully added server as a Windows service!");
     }
 }
