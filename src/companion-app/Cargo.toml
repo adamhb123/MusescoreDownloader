@@ -8,6 +8,7 @@ include = ["shawl.exe"]
 [dependencies]
 actix-files = "0.6.5"
 actix-web = "4.5.1"
+config = {version="0.14.0", features=["json"]}
 printpdf = {version="0.7.0", features = ["embedded_images"]}
 regex = "1.10.4"
 resvg = "0.41.0"

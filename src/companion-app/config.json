@@ -1,0 +1,6 @@
+{
+            require_admin: true,
+            service_name: msd-companion,
+            address: 127.0.0.1,
+            port: 42134
+        }

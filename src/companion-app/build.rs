@@ -1,5 +1,6 @@
 use copy_to_output::copy_to_output;
 use std::env;
+
 #[cfg(target_os = "windows")]
 fn elevate_privileges() {
     use std::{io::Write, process};
@@ -28,7 +29,7 @@ fn elevate_privileges() {
 
 #[cfg(target_os = "windows")]
 fn main() {
-    elevate_privileges();
+    //elevate_privileges();
     println!("cargo:rerun-if-changed=shawl.exe");
     copy_to_output("shawl.exe", &env::var("PROFILE").unwrap()).expect("Could not copy");
 }

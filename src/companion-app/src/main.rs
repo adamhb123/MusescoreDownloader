@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use std::fs;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::{fs::File, process::Command};
+
+use config::Config;
 
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer};
 use printpdf::{image_crate::ImageDecoder, *};
@@ -9,18 +12,26 @@ use regex::Regex;
 use resvg::usvg::fontdb;
 use resvg::{self, tiny_skia, usvg};
 
+mod tests;
+mod msd_config;
+mod common;
+
 const MSD_COMPANION_SERVICE_NAME: &str = "msd-companion";
 
 // const PDF_A4: (f32, f32) = (210.0, 297.0);
 const SCORE_IMAGE_REGEX: &str = r".*(score_\d*)(.*)(\.png|\.svg)";
 
+
+
 fn svg_to_png(path: &Path) -> PathBuf {
     let tree = {
-        let mut opt = usvg::Options::default();
         // Get file's absolute directory.
-        opt.resources_dir = std::fs::canonicalize(path)
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+        let opt = resvg::usvg::Options {
+            resources_dir: std::fs::canonicalize(path)
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf())),
+            ..Default::default()
+        };
 
         let mut fontdb = fontdb::Database::new();
         fontdb.load_system_fonts();
