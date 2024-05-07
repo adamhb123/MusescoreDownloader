@@ -3,7 +3,10 @@
 use super::*;
 #[test]
 fn test_svg_to_png() {
-    svg_to_png(Path::new(".\\rsc\\ferris.svg"));
+    let mut svg = std::env::current_dir()
+        .unwrap().canonicalize().unwrap();
+    svg.push("src/tests/rsc/score_1.svg");
+    svg_to_png(&svg);
 }
 
 #[test]

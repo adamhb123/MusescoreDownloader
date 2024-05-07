@@ -1,5 +1,6 @@
 const MSD_COMPANION_ADDR = "127.0.0.1:45542";
 const USER_DOWNLOAD_DIR = "C:\\Users\\swat8\\Downloads"
+const EXT_EXTRACTOR_REGEX = /.*score_\d*.*.(png|svg)/;
 
 const timeout = (ms) => { return new Promise(res => setTimeout(res, ms)) };
 
@@ -38,20 +39,23 @@ const downloadURI = async (uri, name) => {
 }
 
 const downloadPageImgs = async () => {
+    console.log("Downloading page imgs...")
     const cname = document.getElementById("jmuse-scroller-component").children[0].getAttribute("class");
     const pages = document.getElementsByClassName(cname);
     let paths = [];
     console.log(pages);
-    if (pages.some(page => page.getElementsByTagName("img")[0].getAttribute("src").endswith("svg")))
     for (let i = 0; i < pages.length; i++) {
         console.log(pages[i]);
-        paths.push(`${USER_DOWNLOAD_DIR}\\score_${i}.png`);
-        console.log(`Downloading page ${i + 1}/${pages.length}`);
         let page = pages[i]
         page.scrollIntoView();
         await waitForImg(page);
         let uri = page.getElementsByTagName("img")[0].getAttribute("src");
-        await downloadURI(uri, `score_${i}.png`);
+        let ext = uri.match(EXT_EXTRACTOR_REGEX)[1] ?? "png"; // Should be "png" or "svg"
+        let file_name = `score_${i}.${ext}`;
+        console.log(`EXTENSION:  ${ext}`);
+        paths.push(`${USER_DOWNLOAD_DIR}\\${file_name}`);
+        console.log(`Downloading page ${i + 1}/${pages.length}`);
+        await downloadURI(uri, file_name);
     }
     // Try and wait for all downloads to finish (no way to check?)
     await timeout(1000);

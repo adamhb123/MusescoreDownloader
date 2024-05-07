@@ -9,6 +9,7 @@ use config::Config;
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer};
 use printpdf::{image_crate::ImageDecoder, *};
 use regex::Regex;
+use resvg::tiny_skia::Color;
 use resvg::usvg::fontdb;
 use resvg::{self, tiny_skia, usvg};
 
@@ -35,13 +36,14 @@ fn svg_to_png(path: &Path) -> PathBuf {
 
         let mut fontdb = fontdb::Database::new();
         fontdb.load_system_fonts();
-
+        println!("PATH: {:?}", path);
         let svg_data = std::fs::read(path).unwrap();
         usvg::Tree::from_data(&svg_data, &opt, &fontdb).unwrap()
     };
 
     let pixmap_size = tree.size().to_int_size();
     let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height()).unwrap();
+    pixmap.fill(Color::WHITE);
     resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
     let output_path = path.with_extension("png");
     pixmap.save_png(&output_path).unwrap();

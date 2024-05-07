@@ -52,9 +52,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.downloads.onChanged.addListener((downloadDelta) => {
   console.log(downloadDelta);
   if (downloadDelta.filename) {
-    let match = downloadDelta.filename.current.match(/.*score_([0-9]*).*.png/);
+    let match = downloadDelta.filename.current.match(/.*score_([0-9]*).*.(png|svg)/);
     console.log(match);
-    console.log(`Downloading file #${match[1]}`);
+    if (match) { console.log(`Downloading file #${match[1]}`); }
   }
 });
 

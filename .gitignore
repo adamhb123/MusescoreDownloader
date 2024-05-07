@@ -1,1 +1,3 @@
 src/companion-app/target
+src/**/*.png
+src/**/*.svg
