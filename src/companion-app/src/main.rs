@@ -6,12 +6,13 @@ use std::{fs::File, process::Command};
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer};
 use printpdf::{image_crate::ImageDecoder, *};
 use regex::Regex;
-use resvg::{self, tiny_skia, usvg};
 use resvg::usvg::fontdb;
+use resvg::{self, tiny_skia, usvg};
+
+const MSD_COMPANION_SERVICE_NAME: &str = "msd-companion";
 
 // const PDF_A4: (f32, f32) = (210.0, 297.0);
 const SCORE_IMAGE_REGEX: &str = r".*(score_\d*)(.*)(\.png|\.svg)";
-
 
 fn svg_to_png(path: &Path) -> PathBuf {
     let tree = {
@@ -132,22 +133,41 @@ async fn start_server() -> std::io::Result<()> {
         .await
 }
 
+#[cfg(target_os = "windows")]
+fn check_windows_service_exists() -> Option<bool> {
+    if cfg!(target_os = "windows") {
+        let output = Command::new(format!("sc interrogate \"{}\"", MSD_COMPANION_SERVICE_NAME))
+            .output()
+            .unwrap();
+        println!("{:?}", output);
+        Some(true)
+    } else {
+        None
+    }
+}
+
 fn main() {
     let mut setup_errs: Vec<String> = vec![];
+    let cur_dir = std::env::current_dir()
+        .unwrap()
+        .as_os_str()
+        .to_str()
+        .unwrap()
+        .to_owned();
     if cfg!(target_os = "windows") {
         // Add app as Service (windows)
         let shawl_add_cmd = format!(
-            ".\\shawl.exe add --name msd-companion -- {}\\msd-companion.exe",
-            std::env::current_dir()
-                .unwrap()
-                .as_os_str()
-                .to_str()
-                .unwrap()
+            ".\\shawl.exe add --name {} -- {}\\msd-companion.exe",
+            MSD_COMPANION_SERVICE_NAME, cur_dir
         );
         println!("{}", shawl_add_cmd);
         setup_errs = [
             Command::new(shawl_add_cmd).output(),
-            Command::new("sc config msd-companion start=auto && sc start msd-companion").output(),
+            Command::new(format!(
+                "sc config {0} start=auto && sc start {0}",
+                MSD_COMPANION_SERVICE_NAME
+            ))
+            .output(),
         ]
         .iter()
         .filter_map(|e| {
