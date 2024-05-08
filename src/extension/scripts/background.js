@@ -36,8 +36,8 @@ const _deactivateIcon = () => chrome.action.setIcon({
   }
 });
 
-const updateIcon = (url) =>  (typeof (url) == "string" && url.match(/https:\/\/musescore.com\/.*\/scores\/.*/g)) ? _activateIcon() : _deactivateIcon();
-  
+const updateIcon = (url) => (typeof (url) == "string" && url.match(/https:\/\/musescore.com\/.*\/scores\/.*/g)) ? _activateIcon() : _deactivateIcon();
+
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   let [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab) return;
@@ -62,6 +62,23 @@ chrome.contentSettings.automaticDownloads.set({
   primaryPattern: "https://musescore.com/*",
   setting: "allow"
 });
+
+chrome.runtime.onMessage.addListener(
+  (request, sender, sendResponse) => {
+    (async () => {
+      console.log(sender.tab ?
+        "from a content script:" + sender.tab.url :
+        "from the extension");
+      if (request.command === "get-downloads") {
+        let res = await chrome.downloads.search(...request.args);
+        console.log(res);
+        console.log("Downloads: "); console.log(res);
+        sendResponse(res);
+      }
+    })();
+    return true;
+  }
+);
 
 chrome.action.onClicked.addListener((tab) => {
   chrome.scripting.executeScript({

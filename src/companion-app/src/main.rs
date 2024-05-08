@@ -13,16 +13,14 @@ use resvg::tiny_skia::Color;
 use resvg::usvg::fontdb;
 use resvg::{self, tiny_skia, usvg};
 
-mod tests;
-mod msd_config;
 mod common;
+mod msd_config;
+mod tests;
 
 const MSD_COMPANION_SERVICE_NAME: &str = "msd-companion";
 
 // const PDF_A4: (f32, f32) = (210.0, 297.0);
 const SCORE_IMAGE_REGEX: &str = r".*(score_\d*)(.*)(\.png|\.svg)";
-
-
 
 fn svg_to_png(path: &Path) -> PathBuf {
     let tree = {
@@ -108,14 +106,14 @@ fn get_score_image_paths(
     Ok(paths)
 }
 
-fn delete_all_score_image_downloads(download_directory: &Path) -> Result<(), ()> {
-    let paths = get_score_image_paths(download_directory).unwrap();
+fn delete_all_score_image_downloads(directory: &Path) -> Result<Vec<PathBuf>, ()> {
+    let paths = get_score_image_paths(directory).unwrap();
     paths.iter().for_each(|path| fs::remove_file(path).unwrap());
-    Ok(())
+    Ok(paths)
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct MSDQParams {
+struct QParamsMSD {
     paths: String,
     fname: String,
     output_dir: String,
@@ -125,7 +123,7 @@ struct MSDQParams {
 async fn merge_files(req: HttpRequest) -> HttpResponse {
     let qstr = req.query_string();
     println!("qstr: {}", qstr);
-    let params = web::Query::<MSDQParams>::from_query(qstr).unwrap();
+    let params = web::Query::<QParamsMSD>::from_query(qstr).unwrap();
     println!("params: {:#?}", params);
     let (output_dir, fname) = (&params.output_dir, &params.fname);
     let paths: Vec<PathBuf> = params.paths.split(',').map(PathBuf::from).collect();
@@ -137,10 +135,34 @@ async fn merge_files(req: HttpRequest) -> HttpResponse {
     file.into_response(&req)
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct QParamsCleanScores {
+    directory: String,
+}
+#[get("/clean-scores")]
+async fn clean_scores(req: HttpRequest) -> HttpResponse {
+    let qstr = req.query_string();
+    let params = web::Query::<QParamsCleanScores>::from_query(qstr).unwrap();
+    let directory = Path::new(&params.directory).canonicalize().unwrap();
+    let delete_res = delete_all_score_image_downloads(&directory).unwrap();
+    let removed_files_names: Vec<&str> = delete_res
+        .iter()
+        .map(|e| e.file_name().unwrap().to_str().unwrap())
+        .collect();
+    HttpResponse::Ok().body(if removed_files_names.is_empty() {
+        "No score images found in the given directory! All clean!?".to_owned()
+    } else {
+        format!(
+            "Successfully cleaned up score images in directory: {}!\nFiles cleaned: {:#?}",
+            params.directory, removed_files_names
+        )
+    })
+}
+
 #[actix_web::main]
 async fn start_server() -> std::io::Result<()> {
     println!("Server starting...");
-    HttpServer::new(|| App::new().service(merge_files))
+    HttpServer::new(|| App::new().service(merge_files).service(clean_scores))
         .bind(("127.0.0.1", 45542))?
         .run()
         .await
